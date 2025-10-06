@@ -1,10 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>File Upload</title>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        .upload-area { border: 2px dashed #ccc; padding: 20px; text-align: center; margin: 20px 0; }
+        .hidden { display: none; }
+        .link { color: blue; text-decoration: underline; }
+    </style>
 </head>
 <body>
+<h1>Грузи-Качай</h1>
 
+<div class="upload-area" onclick="document.getElementById('fileInput').click()">
+    Нажмите для выбора файла или перенесите его в это окно
+</div>
+
+<input type="file" id="fileInput" class="hidden">
+
+<div id="progress" class="hidden">
+    Загрузка... <span id="progressText">0%</span>
+</div>
+
+<div id="result" class="hidden">
+    Ссылка для скачивания: <a id="downloadLink" class="link" target="_blank"></a>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
