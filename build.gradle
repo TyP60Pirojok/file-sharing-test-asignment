@@ -3,18 +3,48 @@ plugins {
     id 'application'
 }
 
-application {
-    mainClass = 'FileServer'
-}
+group = 'com.example'
+version = '1.0.0'
 
 repositories {
     mavenCentral()
 }
 
-dependencies {
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
 }
 
-tasks.register('runServer', JavaExec) {
-    classpath = sourceSets.main.runtimeClasspath
+application {
     mainClass = 'FileServer'
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src/main/java']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+}
+
+jar {
+    manifest {
+        attributes(
+                'Main-Class': 'FileServer',
+                'Implementation-Version': archiveVersion.get()
+        )
+    }
+
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
 }
