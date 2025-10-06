@@ -5,15 +5,31 @@
     <title>File Upload</title>
     <style>
         body { font-family: Arial; margin: 40px; }
-        .upload-area { border: 2px dashed #ccc; padding: 20px; text-align: center; margin: 20px 0; }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin: 20px 0;
+            transition: all 0.3s;
+        }
+        .upload-area.drag-over {
+            border-color: #007bff;
+            background-color: #f8f9fa;
+        }
         .hidden { display: none; }
         .link { color: blue; text-decoration: underline; }
+        .stats {
+            margin-top: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
 <h1>Грузи-Качай</h1>
 
-<div class="upload-area" onclick="document.getElementById('fileInput').click()">
+<div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
     Нажмите для выбора файла или перенесите его в это окно
 </div>
 
@@ -25,6 +41,13 @@
 
 <div id="result" class="hidden">
     Ссылка для скачивания: <a id="downloadLink" class="link" target="_blank"></a>
+</div>
+
+<div class="stats">
+    <h3>Статистика по файлам</h3>
+    <div>Было загружено файлов: <span id="totalFiles">0</span></div>
+    <div>Общий размер: <span id="totalSize">0</span> байт</div>
+    <button onclick="loadStats()">Обновить статистику</button>
 </div>
 
 <script src="script.js"></script>
