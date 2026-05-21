@@ -17,23 +17,27 @@ public class FileServer {
 
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
 
+        // Статические файлы
         server.createContext("/", exchange -> {
-            if ("GET".equals(exchange.getRequestMethod())) {
-                String path = exchange.getRequestURI().getPath();
-                if (path.equals("/")) path = "/index.html";
-
-                Path file = Paths.get("src/main/resources/" + path);
-                if (Files.exists(file)) {
-                    exchange.sendResponseHeaders(200, Files.size(file));
-                    Files.copy(file, exchange.getResponseBody());
-                } else {
-                    exchange.sendResponseHeaders(404, 0);
-                }
+            String method = exchange.getRequestMethod();
+            String path = exchange.getRequestURI().getPath();
+            if (!"GET".equals(method)) {
+                exchange.sendResponseHeaders(405, 0);
+                exchange.close();
+                return;
+            }
+            if (path.equals("/")) path = "/index.html";
+            Path file = Paths.get("src/main/resources" + path);
+            if (Files.exists(file) && !Files.isDirectory(file)) {
+                exchange.sendResponseHeaders(200, Files.size(file));
+                Files.copy(file, exchange.getResponseBody());
+            } else {
+                exchange.sendResponseHeaders(404, 0);
             }
             exchange.close();
         });
 
-        // Загрузка файла с multipart обработкой
+        // Загрузка
         server.createContext("/upload", exchange -> {
             if ("POST".equals(exchange.getRequestMethod())) {
                 try {
@@ -42,8 +46,6 @@ public class FileServer {
                         exchange.sendResponseHeaders(400, 0);
                         return;
                     }
-
-                    // Получаем boundary из Content-Type
                     String boundary = extractBoundary(contentType);
                     if (boundary == null) {
                         exchange.sendResponseHeaders(400, 0);
@@ -59,16 +61,12 @@ public class FileServer {
 
                     for (MultipartPart part : parts) {
                         if (part.isFile()) {
-                            String contentDisposition = part.headers.get("Content-Disposition");
-                            originalFileName = extractFileName(contentDisposition);
-
-                            // Сохраняем с оригинальным расширением
+                            originalFileName = extractFileName(part.headers.get("Content-Disposition"));
+                            String extension = "";
                             if (originalFileName != null && originalFileName.contains(".")) {
-                                String extension = originalFileName.substring(originalFileName.lastIndexOf("."));
-                                fileId += extension;
+                                extension = originalFileName.substring(originalFileName.lastIndexOf("."));
                             }
-
-                            filePath = Paths.get(UPLOAD_DIR, fileId);
+                            filePath = Paths.get(UPLOAD_DIR, fileId + extension);
                             Files.write(filePath, part.content);
                             break;
                         }
@@ -77,7 +75,6 @@ public class FileServer {
                     if (filePath != null && Files.exists(filePath)) {
                         long fileSize = Files.size(filePath);
                         files.put(fileId, new FileInfo(fileId, originalFileName, System.currentTimeMillis(), fileSize));
-
                         String response = "http://localhost:8080/download/" + fileId;
                         exchange.sendResponseHeaders(200, response.length());
                         exchange.getResponseBody().write(response.getBytes());
@@ -92,49 +89,56 @@ public class FileServer {
             exchange.close();
         });
 
-        // Скачивание файла
+        // Скачивание
         server.createContext("/download", exchange -> {
             String path = exchange.getRequestURI().getPath();
             String fileId = path.substring(path.lastIndexOf("/") + 1);
-
-            Path filePath = Paths.get(UPLOAD_DIR, fileId);
-            if (Files.exists(filePath)) {
-                FileInfo fileInfo = files.get(fileId);
-                if (fileInfo != null) {
-                    fileInfo.lastAccessed = System.currentTimeMillis();
-
-                    // Устанавливаем оригинальное имя файла в заголовках
-                    if (fileInfo.originalName != null) {
-                        exchange.getResponseHeaders().set("Content-Disposition",
-                                "attachment; filename=\"" + fileInfo.originalName + "\"");
+            Path uploadDir = Paths.get(UPLOAD_DIR);
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(uploadDir)) {
+                Path found = null;
+                for (Path entry : stream) {
+                    if (entry.getFileName().toString().startsWith(fileId)) {
+                        found = entry;
+                        break;
                     }
                 }
-
-                exchange.sendResponseHeaders(200, Files.size(filePath));
-                Files.copy(filePath, exchange.getResponseBody());
-            } else {
-                exchange.sendResponseHeaders(404, 0);
+                if (found != null && Files.exists(found)) {
+                    FileInfo info = files.get(fileId);
+                    if (info != null && info.originalName != null) {
+                        exchange.getResponseHeaders().set("Content-Disposition",
+                                "attachment; filename=\"" + info.originalName + "\"");
+                    }
+                    exchange.sendResponseHeaders(200, Files.size(found));
+                    Files.copy(found, exchange.getResponseBody());
+                } else {
+                    exchange.sendResponseHeaders(404, 0);
+                }
+            } catch (IOException e) {
+                exchange.sendResponseHeaders(500, 0);
             }
             exchange.close();
         });
 
-        // Статистика
+        // Статистика (без изменений)
         server.createContext("/stats", exchange -> {
             if ("GET".equals(exchange.getRequestMethod())) {
                 long totalSize = files.values().stream().mapToLong(f -> f.size).sum();
                 int totalFiles = files.size();
-
-                String json = String.format(
-                        "{\"totalFiles\": %d, \"totalSize\": %d, \"files\": %s}",
-                        totalFiles,
-                        totalSize,
-                        files.values().stream()
-                                .map(f -> String.format(
-                                        "{\"id\": \"%s\", \"originalName\": \"%s\", \"size\": %d, \"lastAccessed\": %d}",
-                                        f.id, escapeJson(f.originalName != null ? f.originalName : "unknown"), f.size, f.lastAccessed))
-                                .reduce("[", (a, b) -> a.equals("[") ? a + b : a + "," + b) + "]"
-                );
-
+                StringBuilder sb = new StringBuilder();
+                sb.append("{\"totalFiles\":").append(totalFiles)
+                        .append(",\"totalSize\":").append(totalSize)
+                        .append(",\"files\":[");
+                boolean first = true;
+                for (FileInfo f : files.values()) {
+                    if (!first) sb.append(",");
+                    sb.append("{\"id\":\"").append(escapeJson(f.id))
+                            .append("\",\"originalName\":\"").append(escapeJson(f.originalName))
+                            .append("\",\"size\":").append(f.size)
+                            .append(",\"lastAccessed\":").append(f.lastAccessed).append("}");
+                    first = false;
+                }
+                sb.append("]}");
+                String json = sb.toString();
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, json.length());
                 exchange.getResponseBody().write(json.getBytes());
@@ -145,143 +149,106 @@ public class FileServer {
         server.start();
         System.out.println("Server started on http://localhost:8080");
 
-        // Очистка старых файлов (30 дней)
         new Timer().schedule(new TimerTask() {
-            public void run() {
-                cleanOldFiles();
-            }
+            public void run() { cleanOldFiles(); }
         }, 0, 24 * 60 * 60 * 1000);
     }
 
     static String extractBoundary(String contentType) {
         Pattern pattern = Pattern.compile("boundary=(.*)");
         Matcher matcher = pattern.matcher(contentType);
-        if (matcher.find()) {
-            return matcher.group(1).trim();
-        }
-        return null;
+        return matcher.find() ? matcher.group(1).trim() : null;
     }
 
     static String extractFileName(String contentDisposition) {
         if (contentDisposition == null) return null;
         Pattern pattern = Pattern.compile("filename=\"(.*?)\"");
         Matcher matcher = pattern.matcher(contentDisposition);
-        if (matcher.find()) {
-            return URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8);
-        }
-        return null;
+        return matcher.find() ? URLDecoder.decode(matcher.group(1), StandardCharsets.UTF_8) : null;
     }
 
     static String escapeJson(String str) {
         if (str == null) return "";
-        return str.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\b", "\\b")
-                .replace("\f", "\\f")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+        return str.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     static void cleanOldFiles() {
         long now = System.currentTimeMillis();
         long thirtyDaysMs = 30L * 24 * 60 * 60 * 1000;
-
         files.entrySet().removeIf(entry -> {
             FileInfo info = entry.getValue();
             if (now - info.lastAccessed > thirtyDaysMs) {
                 try {
-                    Files.deleteIfExists(Paths.get(UPLOAD_DIR, info.id));
+                    Path uploadDir = Paths.get(UPLOAD_DIR);
+                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(uploadDir, p -> p.getFileName().toString().startsWith(info.id))) {
+                        for (Path p : stream) Files.deleteIfExists(p);
+                    }
                     System.out.println("Deleted old file: " + info.id);
                     return true;
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+                } catch (IOException e) { e.printStackTrace(); }
             }
             return false;
         });
     }
 
     static class FileInfo {
-        String id;
-        String originalName;
-        long lastAccessed;
-        long size;
-
+        String id, originalName;
+        long lastAccessed, size;
         FileInfo(String id, String originalName, long lastAccessed, long size) {
-            this.id = id;
-            this.originalName = originalName;
-            this.lastAccessed = lastAccessed;
-            this.size = size;
+            this.id = id; this.originalName = originalName; this.lastAccessed = lastAccessed; this.size = size;
         }
     }
 
-    // Multipart парсер
     static class MultipartParser {
-        private final String boundary;
-        private static final String BOUNDARY_PREFIX = "--";
-
-        public MultipartParser(String boundary) {
-            this.boundary = boundary;
-        }
-
-        public List<MultipartPart> parse(InputStream inputStream) throws IOException {
+        private final byte[] boundaryBytes;
+        public MultipartParser(String boundary) { this.boundaryBytes = ("--" + boundary).getBytes(StandardCharsets.US_ASCII); }
+        public List<MultipartPart> parse(InputStream is) throws IOException {
             List<MultipartPart> parts = new ArrayList<>();
-            String currentBoundary = BOUNDARY_PREFIX + boundary;
-            String endBoundary = currentBoundary + BOUNDARY_PREFIX;
-
-            byte[] data = inputStream.readAllBytes();
-            String text = new String(data);
-
-            String[] partsData = text.split(Pattern.quote(currentBoundary));
-
-            for (String partData : partsData) {
-                if (partData.trim().isEmpty() || partData.contains(endBoundary)) {
-                    continue;
+            byte[] data = is.readAllBytes();
+            int start = 0;
+            while (true) {
+                int idx = indexOf(data, boundaryBytes, start);
+                if (idx == -1) break;
+                int partStart = idx + boundaryBytes.length;
+                if (partStart >= data.length) break;
+                int nextBoundary = indexOf(data, boundaryBytes, partStart);
+                if (nextBoundary == -1) break;
+                int partEnd = nextBoundary - 2; // убираем \r\n перед следующим boundary
+                if (partEnd <= partStart) { start = nextBoundary; continue; }
+                byte[] partData = Arrays.copyOfRange(data, partStart, partEnd);
+                int headerEndPos = indexOf(partData, "\r\n\r\n".getBytes(StandardCharsets.US_ASCII), 0);
+                if (headerEndPos > 0) {
+                    byte[] headersRaw = Arrays.copyOfRange(partData, 0, headerEndPos);
+                    byte[] content = Arrays.copyOfRange(partData, headerEndPos + 4, partData.length);
+                    Map<String, String> headers = new HashMap<>();
+                    for (String line : new String(headersRaw, StandardCharsets.US_ASCII).split("\r\n")) {
+                        int colon = line.indexOf(':');
+                        if (colon > 0) headers.put(line.substring(0, colon).trim(), line.substring(colon + 1).trim());
+                    }
+                    MultipartPart part = new MultipartPart();
+                    part.headers = headers;
+                    part.content = content;
+                    parts.add(part);
                 }
-
-                int headerEnd = partData.indexOf("\r\n\r\n");
-                if (headerEnd == -1) continue;
-
-                String headersSection = partData.substring(0, headerEnd);
-                byte[] content = partData.substring(headerEnd + 4).getBytes();
-
-                if (content.length >= 2) {
-                    content = Arrays.copyOf(content, content.length - 2);
-                }
-
-                MultipartPart part = new MultipartPart();
-                part.headers = parseHeaders(headersSection);
-                part.content = content;
-                parts.add(part);
+                start = nextBoundary;
             }
-
             return parts;
         }
-
-        private Map<String, String> parseHeaders(String headersSection) {
-            Map<String, String> headers = new HashMap<>();
-            String[] headerLines = headersSection.split("\r\n");
-
-            for (String line : headerLines) {
-                int colonIndex = line.indexOf(':');
-                if (colonIndex > 0) {
-                    String key = line.substring(0, colonIndex).trim();
-                    String value = line.substring(colonIndex + 1).trim();
-                    headers.put(key, value);
-                }
+        private int indexOf(byte[] array, byte[] target, int start) {
+            outer: for (int i = start; i <= array.length - target.length; i++) {
+                for (int j = 0; j < target.length; j++) if (array[i + j] != target[j]) continue outer;
+                return i;
             }
-            return headers;
+            return -1;
         }
     }
 
     static class MultipartPart {
         Map<String, String> headers;
         byte[] content;
-
         boolean isFile() {
-            String contentDisposition = headers.get("Content-Disposition");
-            return contentDisposition != null && contentDisposition.contains("filename=");
+            String cd = headers.get("Content-Disposition");
+            return cd != null && cd.contains("filename=");
         }
     }
 }

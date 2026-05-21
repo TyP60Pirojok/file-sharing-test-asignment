@@ -3,7 +3,6 @@ plugins {
     id 'application'
 }
 
-group = 'com.example'
 version = '1.0.0'
 
 repositories {
