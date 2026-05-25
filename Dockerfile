@@ -1,19 +1,18 @@
-FROM openjdk:17-jdk-slim
-LABEL authors="Pakhomov"
+FROM openjdk:17-jdk-alpine
 
 WORKDIR /app
 
-# Копируем исходники и статику
-COPY FileServer.java .
-COPY index.html script.js ./
-RUN mkdir -p src/main/resources && cp index.html script.js src/main/resources/
+# Копируем все файлы приложения
+COPY index.html script.js FileServer.java ./
 
-# Компилируем
-RUN javac FileServer.java
-
-# Создаём папку для загрузок
+# Создаём директорию для загруженных файлов
 RUN mkdir -p uploads
 
+# Компилируем Java-код
+RUN javac FileServer.java
+
+# Открываем порт
 EXPOSE 8080
 
+# Запускаем сервер
 CMD ["java", "FileServer"]
