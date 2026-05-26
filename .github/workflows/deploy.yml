@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD для файлообменника
 
 on:
   push:
@@ -16,55 +16,75 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout code
+      - name: Клонируем репозиторий
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
+      - name: Логинимся в GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Собираем Docker-образ
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          load: true   # загружаем образ в локальный Docker раннера
+
+      - name: Проверяем работоспособность образа (быстрый тест)
+        run: |
+          docker run --rm -d -p 8080:8080 --name test-server ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          sleep 5
+          curl --fail http://localhost:8080/ || exit 1
+          docker stop test-server
+
+      - name: Публикуем образ в GHCR
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
+  # ----- Деплой на удалённый сервер (по SSH) -----
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    if: false   # ЗАМЕНИТЕ на true, когда будет готов реальный сервер и секреты
     steps:
-      - name: Deploy to remote server via SSH
+      - name: Копируем docker-compose.yml на сервер
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "/opt/file-server/"
+
+      - name: Подключаемся по SSH и перезапускаем контейнер
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          port: ${{ secrets.SERVER_PORT }} # по умолчанию 22
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            # Остановить и удалить старый контейнер, если существует
-            docker stop file-uploader || true
-            docker rm file-uploader || true
+            cd /opt/file-server
+            docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+            docker compose pull
+            docker compose up -d --force-recreate
+            docker system prune -f
 
-            # Логинимся в GHCR (на сервере должен быть настроен docker)
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # Скачать свежий образ
-            docker pull ghcr.io/${{ github.repository }}:latest
-
-            # Запустить новый контейнер
-            docker run -d \
-              --name file-uploader \
-              -p 80:8080 \
-              -v /data/uploads:/app/uploads \
-              --restart unless-stopped \
-              ghcr.io/${{ github.repository }}:latest
-
-            # Очистка неиспользуемых образов
-            docker image prune -f
+  # ----- Альтернатива: деплой на локальный сервер (self-hosted runner) -----
+  deploy-local:
+    needs: build-and-push
+    runs-on: self-hosted   # должен быть настроен на Windows 10 с Docker Desktop
+    if: false              # включите, если используете self-hosted runner
+    steps:
+      - name: Запускаем новый контейнер из последнего образа
+        run: |
+          docker stop file-server || true
+          docker rm file-server || true
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-server ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest

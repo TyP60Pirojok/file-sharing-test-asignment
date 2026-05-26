@@ -1,18 +1,23 @@
-FROM openjdk:17-jdk-alpine
+# Используем актуальный JDK 17 от Eclipse Temurin
+FROM eclipse-temurin:17-jdk-alpine
 
 WORKDIR /app
 
-# Копируем все файлы приложения
-COPY index.html script.js FileServer.java ./
+# Создаём структуру, которую ожидает FileServer.java
+RUN mkdir -p src/main/resources
 
-# Создаём директорию для загруженных файлов
-RUN mkdir -p uploads
+# Копируем статические файлы из корня проекта в нужное место
+COPY index.html script.js src/main/resources/
 
-# Компилируем Java-код
+# Копируем Java-сервер
+COPY FileServer.java .
+
+# Компилируем
 RUN javac FileServer.java
 
-# Открываем порт
+# Папка для загруженных файлов
+RUN mkdir uploads
+
 EXPOSE 8080
 
-# Запускаем сервер
 CMD ["java", "FileServer"]
