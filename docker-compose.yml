@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  file-server:
+    image: ghcr.io/TyP60Pirojok/file-sharing-test-asignment:latest
+    container_name: file-sharing-test-asignment
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./uploads:/app/uploads
+    restart: unless-stopped

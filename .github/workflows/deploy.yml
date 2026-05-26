@@ -48,11 +48,11 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-  # ----- Деплой на удалённый сервер (по SSH) -----
+  # ----- Деплой на удалённый сервер по SSH -----
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: false   # ЗАМЕНИТЕ на true, когда будет готов реальный сервер и секреты
+    if: true
     steps:
       - name: Копируем docker-compose.yml на сервер
         uses: appleboy/scp-action@v0.1.7
@@ -75,16 +75,3 @@ jobs:
             docker compose pull
             docker compose up -d --force-recreate
             docker system prune -f
-
-  # ----- Альтернатива: деплой на локальный сервер (self-hosted runner) -----
-  deploy-local:
-    needs: build-and-push
-    runs-on: self-hosted   # должен быть настроен на Windows 10 с Docker Desktop
-    if: false              # включите, если используете self-hosted runner
-    steps:
-      - name: Запускаем новый контейнер из последнего образа
-        run: |
-          docker stop file-server || true
-          docker rm file-server || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-server ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
