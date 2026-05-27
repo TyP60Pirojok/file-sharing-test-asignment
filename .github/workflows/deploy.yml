@@ -93,7 +93,7 @@ jobs:
     steps:
       - name: Запускаем новый контейнер из последнего образа
         run: |
-          docker stop file-sharing-test-asignment || true
-          docker rm file-sharing-test-asignment || true
+          docker stop file-sharing-test-asignment
+          docker rm file-sharing-test-asignment
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
