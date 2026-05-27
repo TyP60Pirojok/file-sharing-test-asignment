@@ -17,7 +17,7 @@ public class FileServer {
 
         HttpServer server = HttpServer.create(new InetSocketAddress(8080), 0);
 
-        // Статические файлы
+        // Статические файлы + редакция для проверки
         server.createContext("/", exchange -> {
             String method = exchange.getRequestMethod();
             String path = exchange.getRequestURI().getPath();
