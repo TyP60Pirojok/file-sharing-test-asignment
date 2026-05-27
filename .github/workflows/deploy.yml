@@ -6,7 +6,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ (github.repository) }}
 
 jobs:
   build-and-push:
@@ -26,17 +25,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Этот шаг автоматически переведет имя в нижний регистр и создаст теги
+      - name: Генерация метаданных (имя образа и теги)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+
       - name: Собираем Docker-образ
         uses: docker/build-push-action@v5
         with:
           context: .
           push: false
-          tags: ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           load: true   # загружаем образ в локальный Docker раннера
 
       - name: Проверяем работоспособность образа (быстрый тест)
         run: |
-          docker run --rm -d -p 8080:8080 --name test-server ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker run --rm -d -p 8080:8080 --name test-server ${{ steps.meta.outputs.tags }}
           sleep 5
           curl --fail http://localhost:8080/ || exit 1
           docker stop test-server
@@ -46,7 +55,8 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
   # ----- Деплой на удалённый сервер по SSH -----
   deploy:
@@ -81,9 +91,17 @@ jobs:
     runs-on: self-hosted   # должен быть настроен на Windows 10 с Docker Desktop
     if: true              # включите, если используете self-hosted runner
     steps:
+      # На self-hosted раннере контекст env теряется между джобами,
+      # поэтому здесь самый надежный и простой способ — перевести в нижний регистр через bash/pwsh
+      - name: Приводим имя репозитория к нижнему регистру
+        id: string
+        run: |
+          echo "IMAGE_NAME_LOWER=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+        shell: bash
+
       - name: Запускаем новый контейнер из последнего образа
         run: |
           docker stop file-sharing-test-asignment || true
           docker rm file-sharing-test-asignment || true
-          docker pull ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest
-          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
+          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
