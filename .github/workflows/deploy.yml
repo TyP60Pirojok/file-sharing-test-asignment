@@ -95,5 +95,5 @@ jobs:
         run: |
           docker stop file-sharing-test-asignment || true
           docker rm file-sharing-test-asignment || true
-          docker pull ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest
-          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest"
+          docker pull file-sharing-test-asignment:latest
+          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment:latest"
