@@ -61,7 +61,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "docker-compose.yml"
-          target: "/opt/file-server/"
+          target: "/opt/file-sharing-test-asignment/"
 
       - name: Подключаемся по SSH и перезапускаем контейнер
         uses: appleboy/ssh-action@v1.0.3
@@ -70,7 +70,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd /opt/file-server
+            cd /opt/file-sharing-test-asignment
             docker login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
             docker compose pull
             docker compose up -d --force-recreate
@@ -83,7 +83,7 @@ jobs:
     steps:
       - name: Запускаем новый контейнер из последнего образа
         run: |
-          docker stop file-server || true
-          docker rm file-server || true
+          docker stop file-sharing-test-asignment || true
+          docker rm file-sharing-test-asignment || true
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-server ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
