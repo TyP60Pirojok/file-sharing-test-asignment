@@ -89,14 +89,14 @@ jobs:
   deploy-local:
     needs: build-and-push
     runs-on: self-hosted
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository }}
     steps:
-      - name: Запуск контейнера
-        shell: pwsh
+      - name: Run container
+        shell: bash
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:latest
         run: |
-          docker stop file-sharing-test-asignment -ErrorAction SilentlyContinue
-          docker rm file-sharing-test-asignment -ErrorAction SilentlyContinue
-          docker pull ${env:REGISTRY}/${env:IMAGE_NAME}:latest
-          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${env:REGISTRY}/${env:IMAGE_NAME}:latest
+          docker stop file-sharing-test-asignment || true
+          docker rm file-sharing-test-asignment || true
+          docker pull ${IMAGE}
+          mkdir -p uploads
+          docker run -d -p 8080:8080 -v "${PWD}/uploads:/app/uploads" --name file-sharing-test-asignment ${IMAGE}
