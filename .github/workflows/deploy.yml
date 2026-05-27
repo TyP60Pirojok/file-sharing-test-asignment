@@ -75,3 +75,15 @@ jobs:
             docker compose pull
             docker compose up -d --force-recreate
             docker system prune -f
+
+  deploy-local:
+    needs: build-and-push
+    runs-on: self-hosted   # должен быть настроен на Windows 10 с Docker Desktop
+    if: true              # включите, если используете self-hosted runner
+    steps:
+      - name: Запускаем новый контейнер из последнего образа
+        run: |
+          docker stop file-server || true
+          docker rm file-server || true
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-server ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
