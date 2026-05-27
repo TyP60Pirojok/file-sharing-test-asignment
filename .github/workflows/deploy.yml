@@ -31,7 +31,7 @@ jobs:
         with:
           context: .
           push: false
-          tags: ${{ env.REGISTRY }}/${{ toLower(env.IMAGE_NAME) }}:latest
+          tags: ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest
           load: true   # загружаем образ в локальный Docker раннера
 
       - name: Проверяем работоспособность образа (быстрый тест)
@@ -46,7 +46,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ toLower(env.IMAGE_NAME) }}:latest
+          tags: ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest
 
   # ----- Деплой на удалённый сервер по SSH -----
   deploy:
@@ -85,5 +85,5 @@ jobs:
         run: |
           docker stop file-sharing-test-asignment || true
           docker rm file-sharing-test-asignment || true
-          docker pull ${{ env.REGISTRY }}/${{ toLower(env.IMAGE_NAME) }}:latest
-          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${{ env.REGISTRY }}/${{ toLower(env.IMAGE_NAME) }}:latest
+          docker pull ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest
+          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest

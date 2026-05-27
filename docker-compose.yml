@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  file-server:
+  file-sharing-test-asignment:
     image: ghcr.io/typ60pirojok/file-sharing-test-asignment:latest
     container_name: file-sharing-test-asignment
     ports:
