@@ -84,35 +84,3 @@ jobs:
             docker compose pull
             docker compose up -d --force-recreate
             docker system prune -f
-
-  # ----- Локальный деплой на self-hosted runner (Windows 10) -----
-  deploy-local:
-    needs: build-and-push          # ждём, пока образ соберётся и опубликуется
-    runs-on: self-hosted           # запускается на вашем локальном раннере
-    # если хотите отключить, добавьте строку: if: false
-    steps:
-      - name: Логин в GHCR (self-hosted)
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Остановить и удалить старый контейнер (если есть)
-        run: |
-          docker stop file-sharing-test-asignment || true
-          docker rm file-sharing-test-asignment || true
-
-      - name: Загрузить последний образ
-        run: |
-          docker pull ghcr.io/${{ github.repository }}:latest
-
-      - name: Запустить новый контейнер
-        run: |
-          docker run -d `
-            --name file-sharing-test-asignment `
-            -p 8080:8080 `
-            -v ${pwd}/uploads:/app/uploads `
-            --restart unless-stopped `
-            ghcr.io/${{ github.repository }}:latest
-
-      - name: Очистка неиспользуемых образов
-        run: |
-          docker image prune -f
