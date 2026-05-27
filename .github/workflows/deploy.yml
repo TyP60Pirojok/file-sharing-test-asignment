@@ -91,17 +91,9 @@ jobs:
     runs-on: self-hosted   # должен быть настроен на Windows 10 с Docker Desktop
     if: true              # включите, если используете self-hosted runner
     steps:
-      # На self-hosted раннере контекст env теряется между джобами,
-      # поэтому здесь самый надежный и простой способ — перевести в нижний регистр через bash/pwsh
-      - name: Приводим имя репозитория к нижнему регистру
-        id: string
-        run: |
-          echo "IMAGE_NAME_LOWER=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
-        shell: bash
-
       - name: Запускаем новый контейнер из последнего образа
         run: |
           docker stop file-sharing-test-asignment || true
           docker rm file-sharing-test-asignment || true
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
-          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LOWER }}:latest
+          docker pull ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest
+          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-sharing-test-asignment ${{ env.REGISTRY }}/${{ (env.IMAGE_NAME) }}:latest"
