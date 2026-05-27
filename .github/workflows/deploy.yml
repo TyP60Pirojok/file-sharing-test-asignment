@@ -88,15 +88,12 @@ jobs:
 
   deploy-local:
     needs: build-and-push
-    runs-on: self-hosted
+    runs-on: self-hosted   # должен быть настроен на Windows 10 с Docker Desktop
+    if: true              # включите, если используете self-hosted runner
     steps:
-      - name: Run container
-        shell: bash
-        env:
-          IMAGE: ghcr.io/${{ github.repository }}:latest
+      - name: Запускаем новый контейнер из последнего образа
         run: |
-          docker stop file-sharing-test-asignment || true
-          docker rm file-sharing-test-asignment || true
-          docker pull ${IMAGE}
-          mkdir -p uploads
-          docker run -d -p 8080:8080 -v "${PWD}/uploads:/app/uploads" --name file-sharing-test-asignment ${IMAGE}
+          docker stop file-server || true
+          docker rm file-server || true
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker run -d -p 8080:8080 -v ${PWD}/uploads:/app/uploads --name file-server ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
